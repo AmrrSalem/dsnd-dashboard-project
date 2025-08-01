@@ -1,50 +1,109 @@
-# Import any dependencies needed to execute sql queries
-# YOUR CODE HERE
-
-# Define a class called QueryBase
-# Use inheritance to add methods
-# for querying the employee_events database.
-# YOUR CODE HERE
-
-    # Create a class attribute called `name`
-    # set the attribute to an empty string
-    # YOUR CODE HERE
-
-    # Define a `names` method that receives
-    # no passed arguments
-    # YOUR CODE HERE
-        
-        # Return an empty list
-        # YOUR CODE HERE
+import pandas as pd
+import sqlite3
+from typing import List
+from abc import ABC, abstractmethod
 
 
-    # Define an `event_counts` method
-    # that receives an `id` argument
-    # This method should return a pandas dataframe
-    # YOUR CODE HERE
+class QueryBase(ABC):
+    """Base class for querying employee_events database tables.
 
-        # QUERY 1
-        # Write an SQL query that groups by `event_date`
-        # and sums the number of positive and negative events
-        # Use f-string formatting to set the FROM {table}
-        # to the `name` class attribute
-        # Use f-string formatting to set the name
-        # of id columns used for joining
-        # order by the event_date column
-        # YOUR CODE HERE
-            
-    
+    This abstract base class provides common methods for querying
+    employee-related event data from different tables.
+    """
+    name: str = ""
 
-    # Define a `notes` method that receives an id argument
-    # This function should return a pandas dataframe
-    # YOUR CODE HERE
+    def __init__(self, db_path: str):
+        """Initialize QueryBase with database connection path.
 
-        # QUERY 2
-        # Write an SQL query that returns `note_date`, and `note`
-        # from the `notes` table
-        # Set the joined table names and id columns
-        # with f-string formatting
-        # so the query returns the notes
-        # for the table name in the `name` class attribute
-        # YOUR CODE HERE
+        Args:
+            db_path (str): Path to the SQLite database file
+        """
+        self.db_path = db_path
 
+    def names(self) -> List[str]:
+        """Return a list of names from the table.
+
+        Returns:
+            List[str]: Empty list as placeholder for names
+        """
+        return []
+
+    def event_counts(self, id: int) -> pd.DataFrame:
+        """Query event counts grouped by date for a specific ID.
+
+        Args:
+            id (int): The ID to filter events
+
+        Returns:
+            pd.DataFrame: DataFrame containing event dates and counts
+        """
+        query = f"""
+            SELECT 
+                event_date,
+                SUM(CASE WHEN event_type = 'positive' THEN 1 ELSE 0 END) as positive_events,
+                SUM(CASE WHEN event_type = 'negative' THEN 1 ELSE 0 END) as negative_events
+            FROM {self.name}
+            WHERE employee_id = {id}
+            GROUP BY event_date
+            ORDER BY event_date
+        """
+
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                df = pd.read_sql_query(query, conn)
+            return df
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return pd.DataFrame()
+
+    def notes(self, id: int) -> pd.DataFrame:
+        """Query notes for a specific ID.
+
+        Args:
+            id (int): The ID to filter notes
+
+        Returns:
+            pd.DataFrame: DataFrame containing note dates and notes
+        """
+        query = f"""
+            SELECT 
+                note_date,
+                note
+            FROM notes
+            WHERE employee_id = {id}
+            AND table_name = '{self.name}'
+            ORDER BY note_date
+        """
+
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                df = pd.read_sql_query(query, conn)
+            return df
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return pd.DataFrame()
+
+
+# Example implementation of a derived class
+class EmployeeEvents(QueryBase):
+    """Concrete class for querying employee events."""
+    name = "employee_events"
+
+    def names(self) -> List[str]:
+        """Return a list of employee names.
+
+        Returns:
+            List[str]: List of employee names from the table
+        """
+        query = f"""
+            SELECT DISTINCT employee_name
+            FROM {self.name}
+        """
+
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                df = pd.read_sql_query(query, conn)
+                return df['employee_name'].tolist()
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return []
